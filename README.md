@@ -1,5 +1,7 @@
 # best-buy-final-project
 
+## video link
+https://youtu.be/w0NbDxg0d98
 ## 📐 Updated Application Architecture
 
 ![Updated Architecture Diagram](./assets/bestbuy%20architecture.jpg)
