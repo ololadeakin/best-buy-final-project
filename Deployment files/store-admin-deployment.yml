@@ -1,0 +1,115 @@
+version: "3.7"
+services:
+  mongodb:
+    image: mongo:6.0.6
+    container_name: 'mongo'
+    restart: always
+    ports:
+      - 27017:27017
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - backend_services
+  order-service:
+    image: lolaakin/order-service:latest
+    container_name: 'order-service'
+    restart: always
+    ports:
+      - 3000:3000
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://order-service:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      - ORDER_QUEUE_HOSTNAME=my-eventbus-8915.servicebus.windows.net
+      - ORDER_QUEUE_USERNAME=RootManageSharedAccessKey
+      - ORDER_QUEUE_PASSWORD=HLF3Z+u8+fNAbr5THN0iRJ1PLby2GGObJ+ASbCfceXI=
+      - ORDER_QUEUE_NAME=orders
+      - ORDER_QUEUE_PORT=5671
+      - ORDER_QUEUE_TRANSPORT=tls
+      - ORDER_DB_URI=mongodb://mongodb:27017
+      - ORDER_DB_NAME=orderdb
+      - ORDER_DB_COLLECTION_NAME=orders
+      - USE_WORKLOAD_IDENTITY_AUTH=false
+      - ORDER_QUEUE_URI=amqps://my-eventbus-8915.servicebus.windows.net
+    networks:
+      - backend_services
+  makeline-service:
+    image: lolaakin/makeline-service:latest
+    container_name: 'makeline-service'
+    restart: always
+    ports:
+      - 3001:3001
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://makeline-service:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      - ORDER_QUEUE_URI=amqps://my-eventbus-8915.servicebus.windows.net
+      - ORDER_QUEUE_USERNAME=RootManageSharedAccessKey
+      - ORDER_QUEUE_PASSWORD=HLF3Z+u8+fNAbr5THN0iRJ1PLby2GGObJ+ASbCfceXI=
+      - ORDER_QUEUE_NAME=orders
+      - ORDER_DB_URI=mongodb://mongodb:27017
+      - ORDER_DB_NAME=orderdb
+      - ORDER_DB_COLLECTION_NAME=orders
+      - USE_WORKLOAD_IDENTITY_AUTH=false
+    networks:
+      - backend_services
+    depends_on:
+      mongodb:
+        condition: service_healthy
+  product-service:
+    image: lolaakin/product-service:latest
+    container_name: 'product-service'
+    restart: always
+    ports:
+      - 3002:3002
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://product-service:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - backend_services
+  # virtual-customer:
+  #   image: ramymohamed/virtual-customer-l8:latest
+  #   container_name: 'virtual-customer'
+  #   restart: always
+  #   environment:
+  #     - ORDER_SERVICE_URL=http://order-service:3000/
+  #     - ORDERS_PER_HOUR=3600
+  #   networks:
+  #     - backend_services
+  #   depends_on:
+  #     order-service:
+  #       condition: service_healthy
+  ai-service:
+    image: lolaakin/ai-service:latest
+    container_name: 'ai-service'
+    restart: always
+    ports:
+      - 5001:5001
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://ai-service:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      - USE_AZURE_OPENAI=True
+      - USE_AZURE_AD=False
+      - AZURE_OPENAI_API_VERSION=2024-02-15-preview
+      - AZURE_OPENAI_DEPLOYMENT_NAME=gpt-4
+      - AZURE_OPENAI_ENDPOINT=https://akin0-m9m4xnhv-swedencentral.cognitiveservices.azure.com/
+      - AZURE_OPENAI_DALLE_ENDPOINT=https://akin0-m9m4xnhv-swedencentral.cognitiveservices.azure.com/
+      - AZURE_OPENAI_DALLE_DEPLOYMENT_NAME=dall-e-3
+      - OPENAI_API_KEY=BFb9ZlcY4wrBuQHEBrUfcYgZuX8rEcyysg5g1rTY5ZFzwNbScIHZJQQJ99BDACfhMk5XJ3w3AAAAACOG6eAN
+    networks:
+      - backend_services
+networks:
+  backend_services:
+    driver: bridge

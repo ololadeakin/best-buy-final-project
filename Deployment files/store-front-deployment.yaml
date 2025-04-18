@@ -1,0 +1,43 @@
+version: "3.7"
+services:
+  order-service:
+    image: lolaakin/order-service:latest
+    container_name: 'order-service'
+    restart: always
+    ports:
+      - 3000:3000
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://order-service:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      - ORDER_QUEUE_HOSTNAME=my-eventbus-8915.servicebus.windows.net
+      - ORDER_QUEUE_USERNAME=RootManageSharedAccessKey
+      - ORDER_QUEUE_PASSWORD=HLF3Z+u8+fNAbr5THN0iRJ1PLby2GGObJ+ASbCfceXI=
+      - ORDER_QUEUE_NAME=orders
+      - ORDER_QUEUE_PORT=5671
+      - ORDER_QUEUE_TRANSPORT=tls
+      - USE_WORKLOAD_IDENTITY_AUTH=false
+      - ORDER_DB_URI=mongodb://mongodb:27017
+      - ORDER_DB_NAME=orderdb
+      - ORDER_DB_COLLECTION_NAME=orders
+    networks:
+      - backend_services
+  
+  product-service:
+    image: lolaakin/product-service:latest
+    container_name: 'product-service'
+    restart: always
+    ports:
+      - 3002:3002
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "-q", "http://product-service:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - backend_services
+networks:
+  backend_services:
+    driver: bridge

@@ -1,0 +1,335 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+  selector:
+    app: mongodb
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+spec:
+  serviceName: "mongodb"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:5.0
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+spec:
+  selector:
+    app: order-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      containers:
+        - name: order-service
+          image: lolaakin/order-service:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: order-service-config
+                  key: MONGODB_URI
+            - name: EVENT_BUS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: azure-event-bus-secret
+                  key: connectionString
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: makeline-service
+spec:
+  selector:
+    app: makeline-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: makeline-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: makeline-service
+  template:
+    metadata:
+      labels:
+        app: makeline-service
+    spec:
+      containers:
+        - name: makeline-service
+          image: lolaakin/makeline-service:latest
+          ports:
+            - containerPort: 5000
+          env:
+            - name: MONGODB_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: makeline-service-config
+                  key: MONGODB_URI
+            - name: EVENT_BUS_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: azure-event-bus-secret
+                  key: connectionString
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+spec:
+  selector:
+    app: product-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3002
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-service
+  template:
+    metadata:
+      labels:
+        app: product-service
+    spec:
+      containers:
+        - name: product-service
+          image: lolaakin/product-service:latest
+          ports:
+            - containerPort: 3002
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+spec:
+  selector:
+    app: ai-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-service
+  template:
+    metadata:
+      labels:
+        app: ai-service
+    spec:
+      containers:
+        - name: ai-service
+          image: lolaakin/ai-service:latest
+          ports:
+            - containerPort: 5001
+          env:
+            - name: USE_AZURE_OPENAI
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-service-config
+                  key: USE_AZURE_OPENAI
+            - name: USE_AZURE_AD
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-service-config
+                  key: USE_AZURE_AD
+            - name: AZURE_OPENAI_API_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-service-config
+                  key: AZURE_OPENAI_API_VERSION
+            - name: AZURE_OPENAI_DEPLOYMENT_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-service-config
+                  key: AZURE_OPENAI_DEPLOYMENT_NAME
+            - name: AZURE_OPENAI_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-service-config
+                  key: AZURE_OPENAI_ENDPOINT
+            - name: AZURE_OPENAI_DALLE_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-service-config
+                  key: AZURE_OPENAI_DALLE_ENDPOINT
+            - name: AZURE_OPENAI_DALLE_DEPLOYMENT_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: ai-service-config
+                  key: AZURE_OPENAI_DALLE_DEPLOYMENT_NAME
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: azure-openai-secret
+                  key: apiKey
+---
+# Service for Store Front
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-front
+spec:
+  ports:
+    - port: 80 # Service port exposed outside the cluster
+      targetPort: 8080 # Target container port
+  selector:
+    app: store-front
+  type: LoadBalancer # Expose service externally via load balancer
+---
+# Deployment for Store Admin
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: store-admin
+  template:
+    metadata:
+      labels:
+        app: store-admin
+    spec:
+      nodeSelector:
+        "kubernetes.io/os": linux
+      containers:
+        - name: store-admin
+          image: ramymohamed/store-admin-l8:latest # Admin interface for store
+          ports:
+            - containerPort: 8081 # Admin app port
+              name: store-admin
+          env: # Environment variables for backend URLs
+            - name: VUE_APP_PRODUCT_SERVICE_URL
+              value: "http://product-service:3002/"
+            - name: VUE_APP_MAKELINE_SERVICE_URL
+              value: "http://makeline-service:3001/"
+          resources: # Resource requests and limits
+            requests:
+              cpu: 1m
+              memory: 200Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          startupProbe: # Initial health check
+            httpGet:
+              path: /health
+              port: 8081
+            failureThreshold: 3
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          readinessProbe: # Ready status probe
+            httpGet:
+              path: /health
+              port: 8081
+            failureThreshold: 3
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe: # Ongoing health check
+            httpGet:
+              path: /health
+              port: 8081
+            failureThreshold: 5
+            initialDelaySeconds: 3
+            periodSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store-admin
+spec:
+  selector:
+    app: store-admin
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5173
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: store-admin
+  template:
+    metadata:
+      labels:
+        app: store-admin
+    spec:
+      containers:
+        - name: store-admin
+          image: lolaakin/store-admin:latest
+          ports:
+            - containerPort: 5173
